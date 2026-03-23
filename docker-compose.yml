@@ -1,0 +1,68 @@
+services:
+
+  # ── FastAPI 백엔드 ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: camnet-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/camnet.db
+      - DEBUG=false
+      - POLL_INTERVAL=15
+      - OFFLINE_THRESHOLD=30
+      - CORS_ORIGINS=["http://localhost", "http://localhost:80"]
+    volumes:
+      - camnet-data:/data
+    networks:
+      - camnet-internal
+    # 라즈베리파이 네트워크 직접 접근을 위해 host 네트워크 모드 옵션:
+    # network_mode: host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── React 프론트엔드 + Nginx ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: camnet-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - camnet-internal
+
+volumes:
+  camnet-data:
+    driver: local
+
+networks:
+  camnet-internal:
+    driver: bridge
+
+# ── 프로덕션에서 PostgreSQL 전환 시 아래 주석 해제 ──────────────────────────
+#   db:
+#     image: postgres:16-alpine
+#     container_name: camnet-db
+#     restart: unless-stopped
+#     environment:
+#       POSTGRES_DB:       camnet
+#       POSTGRES_USER:     camnet
+#       POSTGRES_PASSWORD: changeme
+#     volumes:
+#       - pg-data:/var/lib/postgresql/data
+#     networks:
+#       - camnet-internal
+#
+# backend environment 에서 DATABASE_URL 을 아래로 교체:
+#   DATABASE_URL=postgresql+asyncpg://camnet:changeme@db:5432/camnet
