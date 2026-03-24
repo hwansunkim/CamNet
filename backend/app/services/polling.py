@@ -32,6 +32,10 @@ class PollingService:
         # 이전 상태 캐시 — 변경이 있을 때만 브로드캐스트
         self._status_cache: Dict[str, CameraStatus] = {}
 
+    @property
+    def is_running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
     async def start(self):
         logger.info(f"MediaMTX polling started (interval: {settings.POLL_INTERVAL}s)")
         self._task = asyncio.create_task(self._poll_loop())
@@ -60,31 +64,28 @@ class PollingService:
             )
             cameras = result.scalars().all()
 
-        if not cameras:
-            return
+            if not cameras:
+                return
 
-        # 모든 카메라를 동시에 체크 (병렬)
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            tasks = [self._check_camera(client, cam) for cam in cameras]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # 모든 카메라를 동시에 체크 (병렬)
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                tasks = [self._check_camera(client, cam) for cam in cameras]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # DB 업데이트 및 변경 브로드캐스트
-        async with AsyncSessionLocal() as db:
-            for cam, result in zip(cameras, results):
-                if isinstance(result, Exception):
+            # DB 업데이트 및 변경 브로드캐스트 (같은 세션 내에서)
+            for cam, check_result in zip(cameras, results):
+                if isinstance(check_result, Exception):
                     new_status = CameraStatus.offline
                     last_seen = None
                 else:
-                    new_status, last_seen = result
+                    new_status, last_seen = check_result
 
                 prev_status = self._status_cache.get(cam.id)
 
-                # DB 업데이트
-                db_cam = await db.get(Camera, cam.id)
-                if db_cam:
-                    db_cam.status = new_status
-                    if last_seen:
-                        db_cam.last_seen = last_seen
+                # DB 업데이트 (동일 세션의 객체이므로 안전)
+                cam.status = new_status
+                if last_seen:
+                    cam.last_seen = last_seen
 
                 # 상태가 바뀐 경우에만 WebSocket 브로드캐스트
                 if prev_status != new_status:
@@ -103,12 +104,14 @@ class PollingService:
         self, client: httpx.AsyncClient, cam: Camera
     ) -> tuple[CameraStatus, Optional[datetime]]:
         """
-        MediaMTX API 호출해서 해당 path가 실제로 스트리밍 중인지 확인.
-        readyTime 필드가 있으면 퍼블리셔(카메라)가 연결된 것.
+        1차: MediaMTX REST API (api_port/9997) — readyTime으로 스트림 활성 여부 확인
+        2차: API 연결 실패 시 WebRTC 포트 (port/8889) HTTP 응답으로 fallback
         """
+        # ── 1차: MediaMTX REST API ─────────────────────────────────────────
         try:
-            url = f"http://{cam.ip}:{cam.api_port}/v3/paths/get/{cam.path}"
-            resp = await client.get(url)
+            url  = f"http://{cam.ip}:{cam.api_port}/v3/paths/get/{cam.path}"
+            auth = (cam.api_username, cam.api_password) if cam.api_username else None
+            resp = await client.get(url, auth=auth)
             resp.raise_for_status()
             data = resp.json()
 
@@ -119,12 +122,27 @@ class PollingService:
                 return CameraStatus.offline, None
 
         except (httpx.ConnectError, httpx.TimeoutException):
-            return CameraStatus.offline, None
+            # MediaMTX API 미설정 또는 접근 불가 → WebRTC 포트로 fallback
+            logger.debug(f"MediaMTX API unreachable for {cam.name}, trying WebRTC port fallback")
+
         except httpx.HTTPStatusError as e:
-            # 404 = path가 등록 안 됨, 그 외는 서버 문제
             if e.response.status_code == 404:
                 return CameraStatus.offline, None
-            raise
+            if e.response.status_code in (401, 403):
+                # API 인증 필요 → 자격증명 없이 호출 중이므로 WebRTC 포트로 fallback
+                logger.debug(f"MediaMTX API auth required ({e.response.status_code}) for {cam.name}, trying WebRTC port fallback")
+            else:
+                raise
+
+        # ── 2차: WebRTC 포트 HTTP 접근 가능 여부로 판단 ────────────────────
+        try:
+            webrtc_url = f"http://{cam.ip}:{cam.port}/{cam.path}/"
+            resp = await client.get(webrtc_url)
+            if resp.status_code < 500:
+                return CameraStatus.online, datetime.now(timezone.utc)
+            return CameraStatus.offline, None
+        except (httpx.ConnectError, httpx.TimeoutException):
+            return CameraStatus.offline, None
 
     async def check_single(self, camera_id: str) -> CameraStatus:
         """단일 카메라 즉시 체크 (API 요청 시 사용)"""

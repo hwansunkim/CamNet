@@ -24,6 +24,8 @@ class Camera(Base):
     port        = Column(Integer, default=8889)       # MediaMTX WebRTC port
     rtsp_port   = Column(Integer, default=8554)       # MediaMTX RTSP port
     api_port    = Column(Integer, default=9997)       # MediaMTX REST API port
+    api_username = Column(String, default="")         # MediaMTX API Basic Auth
+    api_password = Column(String, default="")
     path        = Column(String, nullable=False)      # stream path e.g. "cam"
     protocol    = Column(Enum(CameraProtocol), default=CameraProtocol.webrtc)
     room        = Column(String, default="")          # room/location label

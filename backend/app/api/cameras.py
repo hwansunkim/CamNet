@@ -3,6 +3,7 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,11 @@ from app.services.polling import polling_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cameras", tags=["cameras"])
+
+
+class PositionUpdate(BaseModel):
+    map_x: float = Field(ge=0, le=100)
+    map_y: float = Field(ge=0, le=100)
 
 
 @router.get("/", response_model=List[CameraResponse])
@@ -99,16 +105,15 @@ async def check_status(camera_id: str, db: AsyncSession = Depends(get_db)):
 @router.patch("/{camera_id}/position", response_model=CameraResponse)
 async def update_position(
     camera_id: str,
-    map_x: float,
-    map_y: float,
+    payload: PositionUpdate,
     db: AsyncSession = Depends(get_db)
 ):
     """도면 위 카메라 위치 업데이트 (드래그 이벤트용)"""
     cam = await db.get(Camera, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail="Camera not found")
-    cam.map_x = max(0.0, min(100.0, map_x))
-    cam.map_y = max(0.0, min(100.0, map_y))
+    cam.map_x = payload.map_x
+    cam.map_y = payload.map_y
     await db.commit()
     await db.refresh(cam)
     return cam

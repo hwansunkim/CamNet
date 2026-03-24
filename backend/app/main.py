@@ -42,8 +42,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=settings.CORS_METHODS,
+    allow_headers=settings.CORS_HEADERS,
 )
 
 # ── 라우터 등록 ─────────────────────────────────
@@ -57,5 +57,5 @@ async def health():
     return {
         "status": "ok",
         "version": settings.VERSION,
-        "ws_clients": polling_service._task is not None,
+        "polling_active": polling_service.is_running,
     }

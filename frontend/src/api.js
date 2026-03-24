@@ -26,7 +26,11 @@ export const api = {
   updateCamera:   (id, data)  => request(`/cameras/${id}`, { method: "PATCH",  body: JSON.stringify(data) }),
   deleteCamera:   (id)        => request(`/cameras/${id}`, { method: "DELETE" }),
   checkStatus:    (id)        => request(`/cameras/${id}/check`, { method: "POST" }),
-  updatePosition: (id, x, y)  => request(`/cameras/${id}/position?map_x=${x}&map_y=${y}`, { method: "PATCH" }),
+  // B-2: position endpoint now uses JSON body instead of query params
+  updatePosition: (id, x, y)  => request(`/cameras/${id}/position`, {
+    method: "PATCH",
+    body: JSON.stringify({ map_x: x, map_y: y }),
+  }),
 
   // ── 도면 맵 ──────────────────────────────────
   getMaps:        ()          => request("/maps"),
@@ -36,8 +40,13 @@ export const api = {
 
 // ── WebSocket Hook ────────────────────────────────────────────────────────────
 
+// I-3: Exponential backoff constants
+const WS_INITIAL_DELAY = 1000;
+const WS_MAX_DELAY = 30000;
+const WS_BACKOFF_FACTOR = 2;
+
 /**
- * useWebSocket — 카메라 상태 실시간 수신
+ * useWebSocket — 카메라 상태 실시간 수신 (with exponential backoff)
  *
  * @param {function} onStatusUpdate  ({ camera_id, status, last_seen }) => void
  * @param {function} onSnapshot      (cameras) => void  ← 최초 연결 시
@@ -45,6 +54,7 @@ export const api = {
 export function useWebSocket({ onStatusUpdate, onSnapshot }) {
   const wsRef  = useRef(null);
   const pingRef = useRef(null);
+  const delayRef = useRef(WS_INITIAL_DELAY);
 
   const connect = useCallback(() => {
     const ws = new WebSocket(WS_URL);
@@ -52,6 +62,7 @@ export function useWebSocket({ onStatusUpdate, onSnapshot }) {
 
     ws.onopen = () => {
       console.log("[WS] connected");
+      delayRef.current = WS_INITIAL_DELAY;  // 연결 성공 시 딜레이 리셋
       pingRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send("ping");
       }, 30_000);
@@ -68,9 +79,11 @@ export function useWebSocket({ onStatusUpdate, onSnapshot }) {
     };
 
     ws.onclose = () => {
-      console.warn("[WS] disconnected, reconnecting in 3s…");
       clearInterval(pingRef.current);
-      setTimeout(connect, 3_000);
+      const delay = delayRef.current;
+      console.warn(`[WS] disconnected, reconnecting in ${delay / 1000}s…`);
+      delayRef.current = Math.min(delay * WS_BACKOFF_FACTOR, WS_MAX_DELAY);
+      setTimeout(connect, delay);
     };
 
     ws.onerror = (err) => console.error("[WS] error", err);

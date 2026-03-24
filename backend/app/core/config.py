@@ -19,6 +19,8 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:80",
     ]
+    CORS_METHODS: List[str] = ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"]
+    CORS_HEADERS: List[str] = ["Content-Type", "Authorization"]
 
     # MediaMTX polling interval (seconds)
     POLL_INTERVAL: int = 15

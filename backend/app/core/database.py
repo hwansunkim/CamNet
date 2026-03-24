@@ -21,18 +21,44 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncSession:
+    """DB 세션 제공. 커밋은 라우터에서 명시적으로 수행."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
 
 
 async def init_db():
-    """Create all tables on startup"""
+    """Create all tables on startup, then add any missing columns (SQLite migration)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if "sqlite" in settings.DATABASE_URL:
+            await conn.run_sync(_sqlite_add_missing_columns)
+
+
+def _sqlite_add_missing_columns(conn):
+    """ALTER TABLE로 누락된 컬럼을 추가한다 (이미 있으면 무시)."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(conn)
+    for table in Base.metadata.sorted_tables:
+        existing = {col["name"] for col in inspector.get_columns(table.name)}
+        for col in table.columns:
+            if col.name not in existing:
+                col_type = col.type.compile(conn.dialect)
+                # 기본값은 SQLAlchemy DDL을 통해 안전하게 처리
+                default_clause = ""
+                if col.default is not None and col.default.arg is not None:
+                    default_val = col.default.arg
+                    if isinstance(default_val, bool):
+                        default_clause = f" DEFAULT {int(default_val)}"
+                    elif isinstance(default_val, (int, float)):
+                        default_clause = f" DEFAULT {default_val}"
+                    elif isinstance(default_val, str):
+                        # 안전한 문자열 이스케이프: single quote 탈출
+                        safe_val = default_val.replace("'", "''")
+                        default_clause = f" DEFAULT '{safe_val}'"
+                conn.execute(text(
+                    f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type}{default_clause}"
+                ))

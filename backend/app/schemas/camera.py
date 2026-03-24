@@ -9,8 +9,10 @@ class CameraBase(BaseModel):
     ip:        str
     port:      int = 8889
     rtsp_port: int = 8554
-    api_port:  int = 9997
-    path:      str
+    api_port:     int = 9997
+    api_username: str = ""
+    api_password: str = ""
+    path:         str
     protocol:  CameraProtocol = CameraProtocol.webrtc
     room:      str = ""
     map_x:     float = Field(50.0, ge=0, le=100)
@@ -27,8 +29,10 @@ class CameraUpdate(BaseModel):
     ip:        Optional[str] = None
     port:      Optional[int] = None
     rtsp_port: Optional[int] = None
-    api_port:  Optional[int] = None
-    path:      Optional[str] = None
+    api_port:     Optional[int] = None
+    api_username: Optional[str] = None
+    api_password: Optional[str] = None
+    path:         Optional[str] = None
     protocol:  Optional[CameraProtocol] = None
     room:      Optional[str] = None
     map_x:     Optional[float] = Field(None, ge=0, le=100)
@@ -43,9 +47,7 @@ class CameraResponse(CameraBase):
     last_seen:  Optional[datetime]
     created_at: datetime
     updated_at: Optional[datetime]
-    webrtc_url: str
-    rtsp_url:   str
-
+    api_password: str = Field(default="", exclude=True)  # 응답에서 비밀번호 제외
     model_config = {"from_attributes": True}
 
     @computed_field

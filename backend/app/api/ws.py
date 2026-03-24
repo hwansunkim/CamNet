@@ -18,8 +18,11 @@ async def websocket_endpoint(websocket: WebSocket):
       { type: "status_update", camera_id: "...", status: "online"|"offline", last_seen: "..." }
       { type: "snapshot",      cameras: [{...}] }  ← 최초 연결 시
     """
-    await ws_manager.connect(websocket)
+    connected = False
     try:
+        await ws_manager.connect(websocket)
+        connected = True
+
         # 최초 연결 시 현재 상태 스냅샷 전송
         from app.core.database import AsyncSessionLocal
         from app.models.camera import Camera
@@ -51,8 +54,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 await ws_manager.send_personal(websocket, {"type": "pong"})
 
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
         logger.info("Client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        ws_manager.disconnect(websocket)
+    finally:
+        if connected:
+            ws_manager.disconnect(websocket)

@@ -1,5 +1,4 @@
 import uuid
-import json
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -43,7 +42,7 @@ async def list_maps(db: AsyncSession = Depends(get_db)):
     return [
         FloorMapResponse(
             id=m.id, name=m.name, description=m.description,
-            rooms=json.loads(m.rooms_json)
+            rooms=m.rooms or []
         )
         for m in maps
     ]
@@ -55,14 +54,14 @@ async def create_map(payload: FloorMapCreate, db: AsyncSession = Depends(get_db)
         id=str(uuid.uuid4()),
         name=payload.name,
         description=payload.description,
-        rooms_json=json.dumps([r.model_dump() for r in payload.rooms]),
+        rooms=[r.model_dump() for r in payload.rooms],
     )
     db.add(fm)
     await db.commit()
     await db.refresh(fm)
     return FloorMapResponse(
         id=fm.id, name=fm.name, description=fm.description,
-        rooms=json.loads(fm.rooms_json)
+        rooms=fm.rooms or []
     )
 
 
@@ -75,10 +74,10 @@ async def update_rooms(
     fm = await db.get(FloorMap, map_id)
     if not fm:
         raise HTTPException(status_code=404, detail="Map not found")
-    fm.rooms_json = json.dumps([r.model_dump() for r in rooms])
+    fm.rooms = [r.model_dump() for r in rooms]
     await db.commit()
     await db.refresh(fm)
     return FloorMapResponse(
         id=fm.id, name=fm.name, description=fm.description,
-        rooms=json.loads(fm.rooms_json)
+        rooms=fm.rooms or []
     )
