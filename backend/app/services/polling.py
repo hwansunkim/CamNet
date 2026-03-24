@@ -68,13 +68,14 @@ class PollingService:
                 return
 
             # 모든 카메라를 동시에 체크 (병렬)
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
                 tasks = [self._check_camera(client, cam) for cam in cameras]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # DB 업데이트 및 변경 브로드캐스트 (같은 세션 내에서)
             for cam, check_result in zip(cameras, results):
                 if isinstance(check_result, Exception):
+                    logger.error(f"Camera {cam.name} ({cam.ip}) poll exception: {check_result!r}")
                     new_status = CameraStatus.offline
                     last_seen = None
                 else:
@@ -151,7 +152,7 @@ class PollingService:
             if not cam:
                 raise ValueError(f"Camera {camera_id} not found")
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
             status, last_seen = await self._check_camera(client, cam)
 
         async with AsyncSessionLocal() as db:

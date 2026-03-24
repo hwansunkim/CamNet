@@ -24,6 +24,7 @@ class Camera(Base):
     port        = Column(Integer, default=8889)       # MediaMTX WebRTC port
     rtsp_port   = Column(Integer, default=8554)       # MediaMTX RTSP port
     api_port    = Column(Integer, default=9997)       # MediaMTX REST API port
+    hls_port    = Column(Integer, default=8888)       # MediaMTX HLS port
     api_username = Column(String, default="")         # MediaMTX API Basic Auth
     api_password = Column(String, default="")
     path        = Column(String, nullable=False)      # stream path e.g. "cam"
@@ -40,6 +41,10 @@ class Camera(Base):
     @property
     def webrtc_url(self) -> str:
         return f"http://{self.ip}:{self.port}/{self.path}/"
+
+    @property
+    def hls_url(self) -> str:
+        return f"/hls/{self.ip}/{self.hls_port}/{self.path}/index.m3u8"
 
     @property
     def rtsp_url(self) -> str:
