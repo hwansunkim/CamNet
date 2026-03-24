@@ -712,3 +712,12 @@ paths:
       -pix_fmt yuv420p -g 60 -bf 0 -b:v 2M -maxrate 2M -bufsize 4M
       -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
+
+  cam2:
+    runOnInit: >
+      ffmpeg -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 30 -i /dev/video1
+      -vf "drawtext=text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=20:y=20:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5"
+           -c:v libx264 -preset ultrafast -tune zerolatency
+      -pix_fmt yuv420p -g 60 -bf 0 -b:v 2M -maxrate 2M -bufsize 4M
+      -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
