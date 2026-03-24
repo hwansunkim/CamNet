@@ -3,22 +3,16 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.camera import Camera
-from app.schemas.camera import CameraCreate, CameraUpdate, CameraResponse
+from app.schemas.camera import CameraCreate, CameraUpdate, CameraResponse, PositionUpdate
 from app.services.polling import polling_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cameras", tags=["cameras"])
-
-
-class PositionUpdate(BaseModel):
-    map_x: float = Field(ge=0, le=100)
-    map_y: float = Field(ge=0, le=100)
 
 
 @router.get("/", response_model=List[CameraResponse])

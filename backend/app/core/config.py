@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # Camera offline threshold (seconds without response)
     OFFLINE_THRESHOLD: int = 30
 
+    # HTTP timeout for MediaMTX health checks (seconds)
+    HTTP_TIMEOUT: float = 5.0
+
+    # WebSocket token (optional). If set, clients must pass ?token=<value>.
+    # Leave empty to disable auth (default — safe for private LAN).
+    WS_TOKEN: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = True

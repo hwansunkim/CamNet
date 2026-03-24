@@ -1,7 +1,12 @@
 import { useEffect, useRef, useCallback } from "react";
 
 const API_BASE = "/api";
-const WS_URL = `ws://${window.location.host}/ws`;
+
+// HTTPS 환경에서는 wss:// 자동 사용 (mixed content 차단 방지)
+const _wsProto = window.location.protocol === "https:" ? "wss" : "ws";
+// 백엔드 WS_TOKEN과 일치하는 값을 VITE_WS_TOKEN 환경변수로 주입 (미설정 시 인증 없음)
+const _wsToken = import.meta.env.VITE_WS_TOKEN || "";
+const WS_URL = `${_wsProto}://${window.location.host}/ws${_wsToken ? `?token=${_wsToken}` : ""}`;
 
 // ── REST helpers ──────────────────────────────────────────────────────────────
 

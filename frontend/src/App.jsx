@@ -19,6 +19,9 @@ export default function App() {
   const camerasRef = useRef(cameras);
   camerasRef.current = cameras;
 
+  // updateCamera 동시 요청 레이스 컨디션 방지 — 카메라별 요청 시퀀스 추적
+  const updateSeqRef = useRef({});
+
   // Clock
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -55,29 +58,39 @@ export default function App() {
   }, []);
 
   // I-2: camerasRef로 stale closure 방지
+  // 동시 요청 레이스 컨디션: seq로 가장 최근 응답만 상태에 반영
   const updateCamera = useCallback(async (id, updates) => {
     setCameras(prev => prev.map(cam => cam.id === id ? normalize({ ...cam, ...updates }) : cam));
+    const seq = (updateSeqRef.current[id] ?? 0) + 1;
+    updateSeqRef.current[id] = seq;
     const currentCam = camerasRef.current.find(c => c.id === id);
     const updated = await api.updateCamera(id, serialize({ ...currentCam, ...updates }));
-    setCameras(prev => prev.map(cam => cam.id === id ? normalize(updated) : cam));
+    if (updateSeqRef.current[id] === seq) {
+      setCameras(prev => prev.map(cam => cam.id === id ? normalize(updated) : cam));
+    }
   }, []);
 
   const updatePosition = useCallback(async (id, x, y) => {
+    const backup = camerasRef.current.find(c => c.id === id);
     setCameras(prev => prev.map(cam => cam.id === id ? { ...cam, mapX: x, mapY: y } : cam));
     try {
       await api.updatePosition(id, x, y);
     } catch (err) {
       console.error("[API] updatePosition error", err);
+      // 실패 시 이전 위치로 롤백
+      if (backup) setCameras(prev => prev.map(cam => cam.id === id ? backup : cam));
     }
   }, []);
 
   // N-4: confirm은 ManageView에서 처리
   const deleteCamera = useCallback(async (id) => {
+    const backup = camerasRef.current;
     setCameras(prev => prev.filter(cam => cam.id !== id));
     try {
       await api.deleteCamera(id);
     } catch (err) {
       console.error("[API] deleteCamera error", err);
+      setCameras(backup); // 실패 시 롤백
     }
   }, []);
 

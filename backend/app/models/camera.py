@@ -38,18 +38,3 @@ class Camera(Base):
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
 
-    @property
-    def webrtc_url(self) -> str:
-        return f"http://{self.ip}:{self.port}/{self.path}/"
-
-    @property
-    def hls_url(self) -> str:
-        return f"/hls/{self.ip}/{self.hls_port}/{self.path}/index.m3u8"
-
-    @property
-    def rtsp_url(self) -> str:
-        return f"rtsp://{self.ip}:{self.rtsp_port}/{self.path}"
-
-    @property
-    def mediamtx_api_url(self) -> str:
-        return f"http://{self.ip}:{self.api_port}/v3/paths/get/{self.path}"

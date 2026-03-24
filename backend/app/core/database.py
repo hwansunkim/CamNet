@@ -38,6 +38,17 @@ async def init_db():
             await conn.run_sync(_sqlite_add_missing_columns)
 
 
+import re
+_SAFE_IDENTIFIER = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+
+def _check_identifier(name: str) -> str:
+    """테이블/컬럼명이 안전한 SQL 식별자인지 검증한다."""
+    if not _SAFE_IDENTIFIER.match(name):
+        raise ValueError(f"안전하지 않은 SQL 식별자: {name!r}")
+    return name
+
+
 def _sqlite_add_missing_columns(conn):
     """ALTER TABLE로 누락된 컬럼을 추가한다 (이미 있으면 무시)."""
     from sqlalchemy import inspect, text
@@ -60,5 +71,6 @@ def _sqlite_add_missing_columns(conn):
                         safe_val = default_val.replace("'", "''")
                         default_clause = f" DEFAULT '{safe_val}'"
                 conn.execute(text(
-                    f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type}{default_clause}"
+                    f"ALTER TABLE {_check_identifier(table.name)}"
+                    f" ADD COLUMN {_check_identifier(col.name)} {col_type}{default_clause}"
                 ))

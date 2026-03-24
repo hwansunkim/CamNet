@@ -1,9 +1,9 @@
 """
 Shared pytest fixtures for CamNet backend tests.
-Uses synchronous TestClient compatible with pytest 6.x (no pytest-asyncio needed).
+Uses synchronous TestClient for API calls; async fixtures via pytest-asyncio.
 """
-import asyncio
 import pytest
+import pytest_asyncio
 from starlette.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
@@ -35,21 +35,12 @@ async def override_get_db():
             raise
 
 
-def _run_async(coro):
-    """동기 테스트에서 async 호출을 위한 헬퍼."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
-@pytest.fixture(autouse=True)
-def setup_database():
-    """각 테스트마다 테이블 생성 및 정리."""
-    _run_async(_create_tables())
+@pytest_asyncio.fixture(autouse=True)
+async def setup_database():
+    """각 테스트마다 테이블 생성 및 정리 (pytest-asyncio로 직접 await)."""
+    await _create_tables()
     yield
-    _run_async(_drop_tables())
+    await _drop_tables()
 
 
 async def _create_tables():
@@ -80,6 +71,7 @@ def sample_camera_data():
         "port": 8889,
         "rtsp_port": 8554,
         "api_port": 9997,
+        "hls_port": 8888,
         "api_username": "",
         "api_password": "secret123",
         "path": "cam",

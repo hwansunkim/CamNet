@@ -68,7 +68,9 @@ class PollingService:
                 return
 
             # 모든 카메라를 동시에 체크 (병렬)
-            async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
+            # return_exceptions=True: 개별 카메라 실패가 다른 카메라 체크를 중단시키지 않음.
+            # 결과를 받은 뒤 isinstance(result, Exception)으로 실패 항목을 별도 처리한다.
+            async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT, trust_env=False) as client:
                 tasks = [self._check_camera(client, cam) for cam in cameras]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -146,23 +148,27 @@ class PollingService:
             return CameraStatus.offline, None
 
     async def check_single(self, camera_id: str) -> CameraStatus:
-        """단일 카메라 즉시 체크 (API 요청 시 사용)"""
+        """단일 카메라 즉시 체크 (API 요청 시 사용).
+
+        세션을 하나로 유지해 detached 객체 접근 및 레이스 컨디션을 방지한다.
+        체크 결과를 _status_cache에도 반영해 다음 폴링 주기에 불필요한
+        브로드캐스트가 발생하지 않도록 한다.
+        """
         async with AsyncSessionLocal() as db:
             cam = await db.get(Camera, camera_id)
             if not cam:
                 raise ValueError(f"Camera {camera_id} not found")
 
-        async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
-            status, last_seen = await self._check_camera(client, cam)
+            async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT, trust_env=False) as client:
+                status, last_seen = await self._check_camera(client, cam)
 
-        async with AsyncSessionLocal() as db:
-            db_cam = await db.get(Camera, camera_id)
-            if db_cam:
-                db_cam.status = status
-                if last_seen:
-                    db_cam.last_seen = last_seen
-                await db.commit()
+            cam.status = status
+            if last_seen:
+                cam.last_seen = last_seen
+            await db.commit()
 
+        # 폴링 주기와 캐시 동기화 — 불필요한 브로드캐스트 방지
+        self._status_cache[camera_id] = status
         return status
 
 

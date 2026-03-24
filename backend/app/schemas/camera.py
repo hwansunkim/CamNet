@@ -1,7 +1,13 @@
-from pydantic import BaseModel, Field, computed_field
+from ipaddress import ip_address, AddressValueError
+from pydantic import BaseModel, Field, computed_field, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.camera import CameraStatus, CameraProtocol
+
+
+class PositionUpdate(BaseModel):
+    map_x: float = Field(ge=0, le=100)
+    map_y: float = Field(ge=0, le=100)
 
 
 class CameraBase(BaseModel):
@@ -19,6 +25,19 @@ class CameraBase(BaseModel):
     map_x:     float = Field(50.0, ge=0, le=100)
     map_y:     float = Field(50.0, ge=0, le=100)
     enabled:   bool = True
+
+    @field_validator("ip")
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        try:
+            addr = ip_address(v)
+        except (AddressValueError, ValueError):
+            raise ValueError(f"유효하지 않은 IP 주소입니다: {v!r}")
+        if addr.is_loopback:
+            raise ValueError("루프백 주소는 허용되지 않습니다")
+        if addr.is_link_local:
+            raise ValueError("링크-로컬 주소(169.254.x.x)는 허용되지 않습니다")
+        return v
 
 
 class CameraCreate(CameraBase):
@@ -40,7 +59,7 @@ class CameraUpdate(BaseModel):
     map_x:     Optional[float] = Field(None, ge=0, le=100)
     map_y:     Optional[float] = Field(None, ge=0, le=100)
     enabled:   Optional[bool] = None
-    status:    Optional[CameraStatus] = None
+    # status는 폴링 서비스만 갱신 — 클라이언트 직접 수정 차단
 
 
 class CameraResponse(CameraBase):

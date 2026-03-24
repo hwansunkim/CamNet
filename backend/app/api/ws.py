@@ -1,5 +1,6 @@
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from app.core.config import settings
 from app.core.ws_manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -7,7 +8,10 @@ router = APIRouter(tags=["websocket"])
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str = Query(default=""),
+):
     """
     실시간 카메라 상태 수신 WebSocket.
 
@@ -18,6 +22,12 @@ async def websocket_endpoint(websocket: WebSocket):
       { type: "status_update", camera_id: "...", status: "online"|"offline", last_seen: "..." }
       { type: "snapshot",      cameras: [{...}] }  ← 최초 연결 시
     """
+    # WS_TOKEN이 설정된 경우에만 토큰 검증 (미설정 시 사내망 무인증 허용)
+    if settings.WS_TOKEN and token != settings.WS_TOKEN:
+        await websocket.close(code=4401, reason="Unauthorized")
+        logger.warning(f"WS rejected — invalid token from {websocket.client}")
+        return
+
     connected = False
     try:
         await ws_manager.connect(websocket)
