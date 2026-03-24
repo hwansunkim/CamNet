@@ -10,6 +10,7 @@ class CameraBase(BaseModel):
     port:      int = 8889
     rtsp_port: int = 8554
     api_port:     int = 9997
+    hls_port:     int = 8888
     api_username: str = ""
     api_password: str = ""
     path:         str
@@ -30,6 +31,7 @@ class CameraUpdate(BaseModel):
     port:      Optional[int] = None
     rtsp_port: Optional[int] = None
     api_port:     Optional[int] = None
+    hls_port:     Optional[int] = None
     api_username: Optional[str] = None
     api_password: Optional[str] = None
     path:         Optional[str] = None
@@ -54,6 +56,11 @@ class CameraResponse(CameraBase):
     @property
     def webrtc_url(self) -> str:
         return f"http://{self.ip}:{self.port}/{self.path}/"
+
+    @computed_field
+    @property
+    def hls_url(self) -> str:
+        return f"/hls/{self.ip}/{self.hls_port}/{self.path}/index.m3u8"
 
     @computed_field
     @property
