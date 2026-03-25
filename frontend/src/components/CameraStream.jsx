@@ -46,7 +46,7 @@ export default function CameraStream({ camera, compact = false }) {
         hlsRef.current = null;
       }
     };
-  }, [hlsUrl]);
+  }, [hlsUrl, camera.status, camera.enabled]);
 
   if (!camera.enabled || camera.status === "offline") {
     return (
