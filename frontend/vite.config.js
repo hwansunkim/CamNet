@@ -10,4 +10,14 @@ export default defineConfig({
       "/hls": { target: "http://localhost:8000", changeOrigin: true },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom"],
+          "vendor-hls":   ["hls.js"],
+        },
+      },
+    },
+  },
 });

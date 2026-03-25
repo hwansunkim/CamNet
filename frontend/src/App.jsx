@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { api, useWebSocket } from "./api";
 import { normalize, serialize } from "./utils";
 import { FONT_MONO, FONT_DISPLAY, COLORS, GLOBAL_CSS } from "./styles";
 import ErrorBoundary from "./components/ErrorBoundary";
-import GridView from "./components/GridView";
-import MapView from "./components/MapView";
-import ManageView from "./components/ManageView";
+
+const GridView   = lazy(() => import("./components/GridView"));
+const MapView    = lazy(() => import("./components/MapView"));
+const ManageView = lazy(() => import("./components/ManageView"));
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
@@ -162,11 +163,15 @@ export default function App() {
               <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: COLORS.textDarker, letterSpacing: 3 }}>LOADING…</span>
             </div>
           ) : (
-            <>
+            <Suspense fallback={
+              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: COLORS.textDarker, letterSpacing: 3 }}>LOADING…</span>
+              </div>
+            }>
               {view === "grid"   && <GridView cameras={cameras} />}
               {view === "map"    && <MapView cameras={cameras} onUpdatePosition={updatePosition} />}
               {view === "manage" && <ManageView cameras={cameras} onAdd={addCamera} onUpdate={updateCamera} onDelete={deleteCamera} />}
-            </>
+            </Suspense>
           )}
         </div>
 
